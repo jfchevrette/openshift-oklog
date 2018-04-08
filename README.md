@@ -27,3 +27,11 @@ oc create -f logspout-serviceaccount.yaml
 oc create -f logspout.yaml
 ```
 
+# TODO
+* Make the `-peer` command-line arguments dynamic somehow. Currently scaling the statefulsets require updating the peer list manually.
+* Secure the /ui/ endpoint?
+* Ship OpenShift logs (apiserver, controllers) from journald
+* Ship OpenShift events?
+* Replace logspout with a log forwarder that can
+  * add openshift/k8s metadata to logs such as namespace, podname, etc...
+  * output all logs as structured logs (json? fluentd?)
