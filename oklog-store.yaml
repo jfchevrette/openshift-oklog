@@ -1,0 +1,93 @@
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: oklog-store
+  labels:
+    app: oklog-store
+spec:
+  replicas: 3
+  serviceName: oklog-store
+  selector:
+    matchLabels:
+      app: oklog-store
+  template:
+    metadata:
+      name: oklog-store
+      labels:
+        app: oklog-store
+    spec:
+      containers:
+      - name: oklog-store
+        image: oklog/oklog:v0.3.1
+        imagePullPolicy: IfNotPresent
+        ports:
+          - name: store-api
+            containerPort: 7650
+          - name: store-cluster
+            containerPort: 7659
+        env:
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+        command:
+          - /bin/sh
+          - -c
+          - |
+            exec /oklog store \
+              -debug \
+              -cluster tcp://$POD_IP:7659 \
+              -api tcp://0.0.0.0:7650 \
+              -peer oklog-ingest-0.oklog-ingest.$POD_NAMESPACE.svc.cluster.local:7659 \
+              -peer oklog-ingest-1.oklog-ingest.$POD_NAMESPACE.svc.cluster.local:7659 \
+              -peer oklog-ingest-2.oklog-ingest.$POD_NAMESPACE.svc.cluster.local:7659 \
+              -peer oklog-store-0.oklog-store.$POD_NAMESPACE.svc.cluster.local:7659 \
+              -peer oklog-store-1.oklog-store.$POD_NAMESPACE.svc.cluster.local:7659 \
+              -peer oklog-store-2.oklog-store.$POD_NAMESPACE.svc.cluster.local:7659 \
+              -store.segment-replication-factor 2 
+          # - -store.segment-retain
+          # - 30m
+          # - -store.segment-purge
+          # - 5m
+          # - -store.path
+          # - /data/store
+          # - -ingest.path
+          # - /data/ingest
+        volumeMounts:
+          - name: oklog-store
+            mountPath: /data
+  terminationGracePeriodSeconds: 10
+  updateStrategy:
+    type: RollingUpdate
+  volumeClaimTemplates:
+  - metadata:
+      name: oklog-store
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 10Gi
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: oklog-store
+  labels:
+    app: oklog-store
+spec:
+  ports:
+  - name: store-api
+    port: 7650
+    targetPort: 7650
+    protocol: TCP
+  - name: store-cluster
+    port: 7659
+    targetPort: 7659
+    protocol: TCP
+  selector:
+    app: oklog-store

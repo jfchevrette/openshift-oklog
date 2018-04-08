@@ -1,0 +1,96 @@
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: oklog-ingest
+  labels:
+    app: oklog-ingest
+spec:
+  replicas: 3
+  serviceName: oklog-ingest
+  selector:
+    matchLabels:
+      app: oklog-ingest
+  template:
+    metadata:
+      name: oklog-ingest
+      labels:
+        app: oklog-ingest
+    spec:
+      containers:
+      - name: oklog-ingest
+        image: oklog/oklog:v0.3.1
+        imagePullPolicy: IfNotPresent
+        ports:
+          - name: ingest-fast
+            containerPort: 7651
+          - name: ingest-durable
+            containerPort: 7652
+          - name: ingest-bulk
+            containerPort: 7653
+          - name: ingest-cluster
+            containerPort: 7659
+        env:
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+        command:
+          - /bin/sh
+          - -c
+          - |
+            exec /oklog ingest \
+              -debug \
+              -cluster tcp://$POD_IP:7659 \
+              -api tcp://0.0.0.0:7650 \
+              -peer oklog-ingest-0.oklog-ingest.$POD_NAMESPACE.svc.cluster.local:7659 \
+              -peer oklog-ingest-1.oklog-ingest.$POD_NAMESPACE.svc.cluster.local:7659 \
+              -peer oklog-ingest-2.oklog-ingest.$POD_NAMESPACE.svc.cluster.local:7659 \
+              -peer oklog-store-0.oklog-store.$POD_NAMESPACE.svc.cluster.local:7659 \
+              -peer oklog-store-1.oklog-store.$POD_NAMESPACE.svc.cluster.local:7659 \
+              -peer oklog-store-2.oklog-store.$POD_NAMESPACE.svc.cluster.local:7659 \
+        volumeMounts:
+          - name: oklog-ingest
+            mountPath: /data
+  terminationGracePeriodSeconds: 10
+  updateStrategy:
+    type: RollingUpdate
+  volumeClaimTemplates:
+  - metadata:
+      name: oklog-ingest
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 10Gi
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: oklog-ingest
+  labels:
+    app: oklog-ingest
+spec:
+  ports:
+  - name: ingest-fast
+    port: 7651
+    targetPort: 7651
+    protocol: TCP
+  - name: ingest-durable
+    port: 7652
+    targetPort: 7652
+    protocol: TCP
+  - name: ingest-bulk
+    port: 7653
+    targetPort: 7653
+    protocol: TCP
+  - name: ingest-cluster
+    port: 7659
+    targetPort: 7659
+    protocol: TCP
+  selector:
+    app: oklog-ingest

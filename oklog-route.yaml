@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Route
+metadata:
+  annotations:
+    kubernetes.io/tls-acme: 'true'
+    openshift.io/host.generated: 'true'
+  labels:
+    app: oklog-store
+  name: oklog
+spec:
+  port:
+    targetPort: store-api
+  tls:
+    insecureEdgeTerminationPolicy: Redirect
+    termination: edge
+  to:
+    kind: Service
+    name: oklog-store
+    weight: 100
+  wildcardPolicy: None
